@@ -1,0 +1,19 @@
+import type { NextRequest } from "next/server";
+
+import { getOrderDetail } from "@/server/shopping/orders";
+import { toErrorResponse } from "@/server/shopping/errors";
+import { jsonWithCustomerSession } from "@/server/shopping/session";
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    return await jsonWithCustomerSession(request, (context) =>
+      getOrderDetail(id, context),
+    );
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}

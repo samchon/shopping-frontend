@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 44 33% 97%;
+    --foreground: 220 26% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 26% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 26% 16%;
+    --primary: 199 91% 38%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 38 54% 92%;
+    --secondary-foreground: 220 26% 22%;
+    --muted: 42 21% 92%;
+    --muted-foreground: 220 12% 42%;
+    --accent: 20 80% 90%;
+    --accent-foreground: 18 45% 22%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 34 18% 84%;
+    --input: 34 18% 84%;
+    --ring: 199 91% 38%;
+    --radius: 1rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(14, 165, 233, 0.08), transparent 32%),
+      radial-gradient(circle at top right, rgba(251, 146, 60, 0.1), transparent 30%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 251, 245, 0.88));
+    min-height: 100vh;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    @apply outline-none;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .surface-blur {
+    backdrop-filter: blur(18px);
+  }
+}
