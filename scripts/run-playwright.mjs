@@ -6,9 +6,12 @@ const port = process.env.PORT ?? "3000";
 const env = {
   ...process.env,
   PORT: port,
-  NEXT_PUBLIC_SHOPPING_API_SIMULATE: "true",
-  SHOPPING_API_SIMULATE: "true",
 };
+
+if (mode !== "readme") {
+  env.NEXT_PUBLIC_SHOPPING_API_SIMULATE = "true";
+  env.SHOPPING_API_SIMULATE = "true";
+}
 
 const args =
   mode === "ui-review" || mode === "readme"

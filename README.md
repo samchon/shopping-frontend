@@ -16,16 +16,20 @@ It is not meant to claim that AI will always invent a perfect storefront alone. 
 ## 2. Getting Started
 Start the shopping backend first.
 
-The backend repository is [`samchon/shopping-backend`](https://github.com/samchon/shopping-backend). Follow its PostgreSQL and schema setup guide, then run the server. One simple path is:
+Start the backend in its own workspace first.
 
 ```bash
 git clone https://github.com/samchon/shopping-backend
 cd shopping-backend
-npm install
-npm run dev
+docker build -t shopping-backend .
+docker run --rm -p 37001:37001 shopping-backend
 ```
 
-Then start the frontend in another terminal.
+That container boots PostgreSQL, applies the schema, seeds the sample store data, and serves the backend on `http://127.0.0.1:37001`.
+
+If you prefer a manual setup, the backend repository is [`samchon/shopping-backend`](https://github.com/samchon/shopping-backend) and still documents the PostgreSQL and schema-first flow.
+
+Then start the frontend in another terminal and workspace.
 
 ```bash
 git clone https://github.com/samchon/shopping-frontend
@@ -41,7 +45,7 @@ Default addresses:
 
 If the backend host changes, set `NEXT_PUBLIC_SHOPPING_API_HOST` before starting the frontend.
 
-For frontend-only testing, the local Playwright commands run in deterministic SDK-boundary simulation mode and do not require the backend server.
+For frontend-only verification, the local Playwright test commands run in deterministic SDK-boundary simulation mode and do not require the backend server.
 
 ## 3. Stack
 - Next.js App Router
@@ -67,8 +71,8 @@ For frontend-only testing, the local Playwright commands run in deterministic SD
 This repo uses browser-first testing.
 
 - `pnpm test:e2e`: builds the app in deterministic SDK-boundary simulation mode and runs Playwright against the frontend only
-- `pnpm ui:review`: builds the app, drives the main screens at desktop, tablet, and mobile sizes, and stores fresh screenshots under `.artifacts/ui-review/`
-- `pnpm readme:screens`: refreshes the curated README screenshots under `public/readme/`
+- `pnpm ui:review`: builds the app in deterministic SDK-boundary simulation mode, drives the main screens at desktop, tablet, and mobile sizes, and stores screenshots under `.artifacts/ui-review/`
+- `pnpm readme:screens`: refreshes the curated README screenshots under `public/readme/` against the real backend, so start `../shopping-backend` first
 - GitHub Actions runs `pnpm check`, `pnpm test:e2e`, and `pnpm ui:review` without booting the backend server
 
 Useful commands:

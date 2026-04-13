@@ -6,7 +6,14 @@ import { expect, test, type Page } from "@playwright/test";
 const reviewTarget = process.env.UI_REVIEW_TARGET ?? ".artifacts/ui-review";
 const readmeMode = process.env.README_SCREENSHOTS === "true";
 
+async function waitForImages(page: Page) {
+  await page.waitForFunction(() =>
+    Array.from(document.images).every((image) => image.complete && image.naturalWidth > 0),
+  );
+}
+
 async function capture(page: Page, filename: string) {
+  await waitForImages(page);
   const outputDir = path.resolve(reviewTarget);
   await mkdir(outputDir, { recursive: true });
   await page.screenshot({
