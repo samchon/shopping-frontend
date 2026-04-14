@@ -41,6 +41,12 @@ The app keeps SDK-specific behavior in the server adapter layer so the UI does n
   - order timeline and status summaries
 - `/orders/[id]`
   - identity verification, shipping address entry, and publish flow
+- `/wallet`
+  - deposit balance, mileage balance, coupon discovery, and coupon ticket ownership
+- `/seller`
+  - seller login or seller join promotion, sale replica creation, sale schedule or pause controls, and paid-order monitoring
+- `/admin`
+  - administrator login or join promotion, market-wide sales and order summaries, coupon creation, and deposit or mileage metadata authoring
 
 ## Notable Choices
 
@@ -51,3 +57,6 @@ The app keeps SDK-specific behavior in the server adapter layer so the UI does n
 - `Suspense` wraps the catalog page because `useSearchParams()` is used in a client component under the App Router.
 - The frontend test program runs in a deterministic SDK-boundary simulation mode so Playwright and README screenshots do not depend on backend uptime or random simulator payloads.
 - Local Playwright was added as a dev dependency because browser verification is part of done-ness for this project.
+- Seller authentication reuses the customer connection and upgrades it into seller scope through dedicated seller endpoints, which keeps the SDK-specific role switching inside the server adapter layer.
+- Administrator authentication follows the same connection-upgrade pattern as seller authentication so role switching stays inside the server adapter layer instead of leaking into UI components.
+- Wallet data is composed from multiple SDK families at the adapter layer: balances and histories from deposits/mileages, plus coupon inventory and ticket issuance from coupons.
