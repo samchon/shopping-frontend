@@ -2,7 +2,7 @@
 
 ## Date
 
-- Verified on April 13, 2026
+- Verified on April 14, 2026
 - Frontend-only test automation ran against the production build served locally through Playwright in deterministic simulation mode
 
 ## Automated Checks
@@ -28,6 +28,13 @@ Browser automation was executed with Playwright after the production build compl
   - filled a shipping address
   - published the order
   - confirmed the order appeared as paid on the orders page
+  - verified wallet balances and coupon claiming flow
+  - logged into the seller console with `robot@nestia.io`
+  - confirmed the paid order appeared in the seller dashboard
+  - created a replica sale and toggled its paused state from the seller console
+  - logged into the administrator console with `robot@nestia.io`
+  - confirmed sales, orders, coupons, and ledger metadata appeared in the admin dashboard
+  - created a new coupon plus deposit and mileage metadata from the admin console
 - Tablet `834x1112`
   - verified catalog layout
   - verified category filtering for `smart_phones`
@@ -38,4 +45,4 @@ Browser automation was executed with Playwright after the production build compl
 ## Artifacts
 
 - UI review screenshots were written to `.artifacts/ui-review/` during the final pass and are ignored by Git.
-- README screenshots were refreshed under `public/readme/`.
+- README screenshots were refreshed under `public/readme/`, including seller studio and admin policy authoring views.

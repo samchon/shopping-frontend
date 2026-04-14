@@ -24,6 +24,16 @@ Before designing screens, make the SDK surface clear.
 - Treat code, types, and comments as the source of truth.
 - Map the main APIs, DTOs, and constraints before designing the UI.
 
+## Account Guidance
+This project has a default operator account that is shared by the seller and administrator flows.
+
+- Customer accounts are not fixed in advance. Create and use them directly in the product, and use membership signup when needed.
+- Seller accounts can also be joined through the product flow when seller onboarding is being tested.
+- The built-in fixed operator account is shared by seller and administrator flows:
+  Seller/administrator email: `robot@nestia.io`
+  Password: `samchon`
+- Preserve this built-in operator account anywhere the seller or administrator login flow is introduced.
+
 ## Design
 The code structure should keep replacement cost low if the SDK changes later.
 

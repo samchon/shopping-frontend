@@ -13,6 +13,13 @@ The purpose of this repo is simple. If the backend gives you a usable SDK, typed
 
 It is not meant to claim that AI will always invent a perfect storefront alone. It is meant to show that backend documentation quality and SDK quality directly change how far frontend automation can go.
 
+Current product coverage:
+
+- Customer storefront with catalog, product detail, cart, order publish, and identity verification
+- Customer wallet with deposit, mileage, available coupons, and coupon tickets
+- Seller console with seller authentication, sale replica creation, sale schedule controls, and paid-order monitoring
+- Administrator console with administrator authentication, coupon creation, and deposit or mileage metadata management
+
 ## 2. Getting Started
 Start the shopping backend first.
 
@@ -58,21 +65,65 @@ For frontend-only verification, the local Playwright test commands run in determ
 - `@samchon/shopping-api`
 
 ## 4. Screens
-### Home
+### Customer
 ![Home screen](public/readme/home.png)
 
-### Product Detail
+> Home
+Catalog landing view with live sale cards, section filters, and search-driven discovery.
+
 ![Product detail screen](public/readme/detail.png)
 
-### Order Detail
+> Product Detail
+SKU-aware option selectors and a large hero image keep the purchase decision on one screen.
+
+![Cart screen](public/readme/cart.png)
+
+> Cart
+The cart turns selected snapshots into a draft order without losing SKU composition details.
+
+![Orders screen](public/readme/orders.png)
+
+> Orders
+Draft and published orders stay visible in a single timeline for quick status tracking.
+
 ![Order detail screen](public/readme/order-detail.png)
+
+> Order Detail
+Identity verification, address input, and publish controls are grouped into one checkout surface.
+
+![Wallet screen](public/readme/wallet.png)
+
+> Wallet
+Deposit, mileage, claimable coupons, and owned tickets are surfaced in one customer wallet dashboard.
+
+### Seller
+![Seller screen](public/readme/seller.png)
+
+> Console
+The seller dashboard summarizes live sales, paid orders, and revenue with operator-ready metrics.
+
+![Seller studio screen](public/readme/seller-studio.png)
+
+> Studio
+Replica inputs let a seller clone an existing sale into a new launch-ready campaign in minutes.
+
+### Administrator
+![Admin screen](public/readme/admin.png)
+
+> Console
+The administrator overview gathers market-wide sales, orders, coupons, and revenue into one surface.
+
+![Admin policies screen](public/readme/admin-policies.png)
+
+> Policies
+Coupon, deposit, and mileage policy forms make operator-side commerce metadata editable from the UI.
 
 ## 5. Test Automation
 This repo uses browser-first testing.
 
 - `pnpm test:e2e`: builds the app in deterministic SDK-boundary simulation mode and runs Playwright against the frontend only
 - `pnpm ui:review`: builds the app in deterministic SDK-boundary simulation mode, drives the main screens at desktop, tablet, and mobile sizes, and stores screenshots under `.artifacts/ui-review/`
-- `pnpm readme:screens`: refreshes the curated README screenshots under `public/readme/` against the real backend, so start `../shopping-backend` first
+- `pnpm readme:screens`: refreshes the curated README screenshots under `public/readme/` against the real backend, so start `../shopping-backend` first. This command is guarded to fail if simulation mode is enabled.
 - GitHub Actions runs `pnpm check`, `pnpm test:e2e`, and `pnpm ui:review` without booting the backend server
 
 Useful commands:

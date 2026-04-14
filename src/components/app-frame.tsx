@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ShoppingCart, UserRound, WalletCards } from "lucide-react";
+import {
+  Home,
+  ShieldCheck,
+  ShoppingCart,
+  Store,
+  UserRound,
+  Wallet,
+  WalletCards,
+} from "lucide-react";
 
 import { SessionDialog } from "@/components/session/session-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -14,6 +22,9 @@ const navItems = [
   { href: "/", label: "Catalog", icon: Home },
   { href: "/cart", label: "Cart", icon: ShoppingCart },
   { href: "/orders", label: "Orders", icon: WalletCards },
+  { href: "/wallet", label: "Wallet", icon: Wallet },
+  { href: "/seller", label: "Seller", icon: Store },
+  { href: "/admin", label: "Admin", icon: ShieldCheck },
 ];
 
 export function AppFrame({ children }: { children: React.ReactNode }) {

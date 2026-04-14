@@ -329,3 +329,200 @@ export interface LoginMemberPayload {
   email: string;
   password: string;
 }
+
+export interface SellerIdentityView {
+  id: string;
+  nickname: string;
+  email: string | null;
+  joinedAt: string;
+  citizen: {
+    name: string;
+    mobile: string;
+  };
+}
+
+export interface SellerSessionView {
+  customer: SessionView;
+  seller: SellerIdentityView | null;
+  active: boolean;
+  canJoin: boolean;
+}
+
+export interface SellerSaleView {
+  id: string;
+  title: string;
+  sectionCode: string;
+  sectionName: string;
+  openedAt: string | null;
+  closedAt: string | null;
+  updatedAt: string;
+  status: "live" | "paused";
+  tags: string[];
+  unitCount: number;
+  stockCount: number;
+  priceRange: {
+    lowest: MoneyView;
+    highest: MoneyView;
+  };
+}
+
+export interface SellerOrderView {
+  id: string;
+  name: string;
+  customerName: string;
+  customerEmail: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  itemCount: number;
+  totalPrice: number;
+}
+
+export interface SellerDashboardView {
+  session: SellerSessionView;
+  sales: SellerSaleView[];
+  orders: SellerOrderView[];
+  metrics: {
+    liveSales: number;
+    pausedSales: number;
+    paidOrders: number;
+    revenue: number;
+  };
+}
+
+export interface SellerReplicaSalePayload {
+  sourceSaleId: string;
+  title: string;
+  sectionCode: string;
+  tags: string[];
+  openedAt: string | null;
+  closedAt: string | null;
+  status: "live" | "paused";
+}
+
+export interface SellerOpenSalePayload {
+  openedAt: string | null;
+  closedAt: string | null;
+}
+
+export interface WalletHistoryEntryView {
+  id: string;
+  label: string;
+  amount: number;
+  balance: number;
+  createdAt: string;
+}
+
+export interface WalletCouponView {
+  id: string;
+  name: string;
+  createdAt: string;
+  openedAt: string | null;
+  closedAt: string | null;
+  discountLabel: string;
+  threshold: number | null;
+  limit: number | null;
+  public: boolean;
+  remaining: number | null;
+}
+
+export interface WalletCouponTicketView {
+  id: string;
+  couponId: string;
+  couponName: string;
+  createdAt: string;
+  expiredAt: string | null;
+  discountLabel: string;
+}
+
+export interface WalletView {
+  session: SessionView;
+  balances: {
+    deposit: number;
+    mileage: number;
+  };
+  depositHistories: WalletHistoryEntryView[];
+  mileageHistories: WalletHistoryEntryView[];
+  coupons: WalletCouponView[];
+  tickets: WalletCouponTicketView[];
+}
+
+export interface AdminIdentityView {
+  id: string;
+  nickname: string;
+  email: string | null;
+  joinedAt: string;
+  citizen: {
+    name: string;
+    mobile: string;
+  };
+}
+
+export interface AdminSessionView {
+  customer: SessionView;
+  admin: AdminIdentityView | null;
+  active: boolean;
+  canJoin: boolean;
+}
+
+export interface AdminCouponView {
+  id: string;
+  name: string;
+  createdAt: string;
+  openedAt: string | null;
+  closedAt: string | null;
+  access: "public" | "private";
+  discountLabel: string;
+}
+
+export interface AdminCreateCouponPayload {
+  name: string;
+  unit: "amount" | "percent";
+  value: number;
+  threshold: number | null;
+  limit: number | null;
+  multiplicative: boolean;
+  access: "public" | "private";
+  exclusive: boolean;
+  volume: number | null;
+  volumePerCitizen: number | null;
+  expiredIn: number | null;
+  openedAt: string | null;
+  closedAt: string | null;
+}
+
+export interface AdminLedgerMetaView {
+  id: string;
+  code: string;
+  source: string;
+  direction: "income" | "outcome";
+  createdAt: string;
+  defaultValue: number | null;
+}
+
+export interface AdminCreateDepositPayload {
+  code: string;
+  source: string;
+  direction: "income" | "outcome";
+}
+
+export interface AdminCreateMileagePayload {
+  code: string;
+  source: string;
+  direction: "income" | "outcome";
+  defaultValue: number | null;
+}
+
+export interface AdminDashboardView {
+  session: AdminSessionView;
+  sales: SellerSaleView[];
+  orders: SellerOrderView[];
+  coupons: AdminCouponView[];
+  deposits: AdminLedgerMetaView[];
+  mileages: AdminLedgerMetaView[];
+  metrics: {
+    sales: number;
+    paidOrders: number;
+    coupons: number;
+    revenue: number;
+  };
+}

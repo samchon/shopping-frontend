@@ -119,6 +119,10 @@ type MemberRecord = {
   };
 };
 
+type RoleMemberRecord = MemberRecord & {
+  roles: Array<"seller" | "administrator">;
+};
+
 type CustomerRecord = {
   id: string;
   type: "customer";
@@ -214,6 +218,62 @@ type OrderRecord = {
   created_at: string;
 };
 
+type LedgerMetaRecord = {
+  id: string;
+  code: string;
+  source: string;
+  direction: 1 | -1;
+  created_at: string;
+  value?: number | null;
+};
+
+type DepositHistoryRecord = {
+  id: string;
+  source_id: string;
+  value: number;
+  balance: number;
+  created_at: string;
+};
+
+type MileageHistoryRecord = {
+  id: string;
+  source_id: string;
+  value: number;
+  balance: number;
+  created_at: string;
+};
+
+type CouponRecord = {
+  id: string;
+  name: string;
+  created_at: string;
+  opened_at: string | null;
+  closed_at: string | null;
+  discount: {
+    unit: "amount" | "percent";
+    value: number;
+    threshold: number | null;
+    limit: number | null;
+    multiplicative?: boolean;
+  };
+  restriction: {
+    access: "public" | "private";
+    exclusive: boolean;
+    volume: number | null;
+    volume_per_citizen: number | null;
+    expired_in: number | null;
+    expired_at: string | null;
+  };
+};
+
+type CouponTicketRecord = {
+  id: string;
+  customer_id: string;
+  coupon_id: string;
+  created_at: string;
+  expired_at: string | null;
+};
+
 type SimulationState = {
   sequence: number;
   tick: number;
@@ -233,6 +293,15 @@ type SimulationState = {
   carts: Map<string, CartCommodityRecord[]>;
   orders: Map<string, OrderRecord[]>;
   members: Map<string, MemberRecord>;
+  operatorMember: RoleMemberRecord;
+  sellerSessions: Set<string>;
+  adminSessions: Set<string>;
+  depositMetas: LedgerMetaRecord[];
+  mileageMetas: LedgerMetaRecord[];
+  depositHistories: Map<string, DepositHistoryRecord[]>;
+  mileageHistories: Map<string, MileageHistoryRecord[]>;
+  coupons: CouponRecord[];
+  couponTickets: Map<string, CouponTicketRecord[]>;
 };
 
 const GLOBAL_STATE_KEY = "__shopping_frontend_simulation__";
@@ -410,6 +479,30 @@ function cloneCustomer(customer: CustomerRecord) {
   return structuredClone(customer);
 }
 
+function assignMemberToCustomer(
+  customer: CustomerRecord,
+  member: MemberRecord,
+) {
+  customer.member = makeMemberProjection(member);
+  customer.citizen = member.citizen ? structuredClone(member.citizen) : customer.citizen;
+}
+
+function requireSeller(state: SimulationState, headers: Headers) {
+  const customer = requireCustomer(state, headers);
+  if (!state.sellerSessions.has(customer.id)) {
+    throw httpError(403, "A simulated seller session is required.");
+  }
+  return customer;
+}
+
+function requireAdmin(state: SimulationState, headers: Headers) {
+  const customer = requireCustomer(state, headers);
+  if (!state.adminSessions.has(customer.id)) {
+    throw httpError(403, "A simulated administrator session is required.");
+  }
+  return customer;
+}
+
 function createSimulationState(): SimulationState {
   const state: SimulationState = {
     sequence: 1,
@@ -430,6 +523,23 @@ function createSimulationState(): SimulationState {
     carts: new Map(),
     orders: new Map(),
     members: new Map(),
+    operatorMember: {
+      id: "",
+      nickname: "",
+      email: "",
+      password: "",
+      created_at: "",
+      citizen: null,
+      roles: ["seller", "administrator"],
+    },
+    sellerSessions: new Set(),
+    adminSessions: new Set(),
+    depositMetas: [],
+    mileageMetas: [],
+    depositHistories: new Map(),
+    mileageHistories: new Map(),
+    coupons: [],
+    couponTickets: new Map(),
   };
 
   const createCategory = (code: string, name: string, parentCode: string | null) => {
@@ -456,6 +566,28 @@ function createSimulationState(): SimulationState {
     code,
     name,
     created_at: advanceTimestamp(state),
+  });
+
+  const createLedgerMeta = (
+    code: string,
+    source: string,
+    direction: 1 | -1,
+    value?: number | null,
+  ): LedgerMetaRecord => ({
+    id: nextRuntimeId(state),
+    code,
+    source,
+    direction,
+    value,
+    created_at: advanceTimestamp(state, 4),
+  });
+
+  const createCoupon = (
+    input: Omit<CouponRecord, "id" | "created_at">,
+  ): CouponRecord => ({
+    ...input,
+    id: nextRuntimeId(state),
+    created_at: advanceTimestamp(state, 4),
   });
 
   const createAttachment = (
@@ -953,6 +1085,71 @@ function createSimulationState(): SimulationState {
 
   state.sales = [macbook, iphone, ipad, watch];
   state.salesById = new Map(state.sales.map((sale) => [sale.id, sale]));
+  state.operatorMember = {
+    id: nextRuntimeId(state),
+    nickname: "Robot",
+    email: "robot@nestia.io",
+    password: "samchon",
+    created_at: advanceTimestamp(state),
+    citizen: {
+      id: nextRuntimeId(state),
+      name: "Robot Operator",
+      mobile: "01000000000",
+      created_at: advanceTimestamp(state, 5),
+    },
+    roles: ["seller", "administrator"],
+  };
+  state.members.set(state.operatorMember.email, state.operatorMember);
+  state.depositMetas = [
+    createLedgerMeta("deposit_charge", "Deposit charge", 1),
+    createLedgerMeta("order_payment", "Order payment", -1),
+  ];
+  state.mileageMetas = [
+    createLedgerMeta("welcome_bonus", "Welcome bonus", 1, 5000),
+    createLedgerMeta("order_reward", "Order reward", 1, 2000),
+    createLedgerMeta("order_usage", "Order usage", -1, null),
+  ];
+  state.coupons = [
+    createCoupon({
+      name: "Spring Launch 10%",
+      opened_at: "2026-04-01T00:00:00.000Z",
+      closed_at: "2026-04-30T23:59:59.000Z",
+      discount: {
+        unit: "percent",
+        value: 10,
+        threshold: 300000,
+        limit: 150000,
+      },
+      restriction: {
+        access: "public",
+        exclusive: false,
+        volume: 100,
+        volume_per_citizen: 1,
+        expired_in: 14,
+        expired_at: null,
+      },
+    }),
+    createCoupon({
+      name: "Creator Bundle 120000 KRW Off",
+      opened_at: "2026-04-05T00:00:00.000Z",
+      closed_at: null,
+      discount: {
+        unit: "amount",
+        value: 120000,
+        threshold: 1500000,
+        limit: null,
+        multiplicative: false,
+      },
+      restriction: {
+        access: "public",
+        exclusive: true,
+        volume: 50,
+        volume_per_citizen: 1,
+        expired_in: 30,
+        expired_at: null,
+      },
+    }),
+  ];
   state.members.set("pilot@samchon.dev", {
     id: nextRuntimeId(state),
     nickname: "Pilot",
@@ -1080,16 +1277,236 @@ function unitPriceRange(unit: UnitFixture) {
   };
 }
 
-function toApiSeller() {
+function toApiSellerSummary(state: SimulationState) {
   return {
     id: "00000000-0000-4000-8000-00000000beef",
-    member: {
-      id: "00000000-0000-4000-8000-00000000feed",
-      nickname: "Robot",
-      emails: [],
-      created_at: "2026-03-01T00:00:00.000Z",
+    type: "seller" as const,
+    member: makeMemberProjection(state.operatorMember),
+    citizen: structuredClone(state.operatorMember.citizen),
+    created_at: state.operatorMember.created_at,
+  };
+}
+
+function cloneSaleFixture(
+  state: SimulationState,
+  source: SaleFixture,
+  input: {
+    title: string;
+    tags: string[];
+    sectionCode: string;
+    openedAt: string | null;
+    closedAt: string | null;
+    status: "paused" | "live";
+  },
+) {
+  const section =
+    state.sales.find((sale) => sale.section.code === input.sectionCode)?.section ??
+    source.section;
+  const createdAt = advanceTimestamp(state, 9);
+  const optionIdMap = new Map<string, string>();
+  const candidateIdMap = new Map<string, string>();
+
+  const sale: SaleFixture = {
+    id: nextRuntimeId(state),
+    snapshotId: nextRuntimeId(state),
+    title: input.title,
+    description: structuredClone(source.description),
+    thumbnails: structuredClone(source.thumbnails).map((attachment) => ({
+      ...attachment,
+      id: nextRuntimeId(state),
+      created_at: createdAt,
+    })),
+    files: structuredClone(source.files).map((attachment) => ({
+      ...attachment,
+      id: nextRuntimeId(state),
+      created_at: createdAt,
+    })),
+    section: structuredClone(section),
+    categoryCodes: structuredClone(source.categoryCodes),
+    tags: input.tags,
+    units: structuredClone(source.units).map((unit) => ({
+      ...unit,
+      id: nextRuntimeId(state),
+      options: unit.options.map((option) => {
+        const nextOptionId = nextRuntimeId(state);
+        optionIdMap.set(option.id, nextOptionId);
+
+        if (option.kind === "select") {
+          return {
+            ...option,
+            id: nextOptionId,
+            candidates: option.candidates.map((candidate) => {
+              const nextCandidateId = nextRuntimeId(state);
+              candidateIdMap.set(candidate.id, nextCandidateId);
+              return {
+                ...candidate,
+                id: nextCandidateId,
+              };
+            }),
+          };
+        }
+
+        return {
+          ...option,
+          id: nextOptionId,
+        };
+      }),
+      stocks: unit.stocks.map((stock) => ({
+        ...stock,
+        id: nextRuntimeId(state),
+        choices: stock.choices.map((choice) => ({
+          optionId: optionIdMap.get(choice.optionId) ?? choice.optionId,
+          candidateId: candidateIdMap.get(choice.candidateId) ?? choice.candidateId,
+        })),
+      })),
+    })),
+    snapshots: [
+      createSnapshot(
+        state,
+        input.title,
+        structuredClone(source.snapshots.at(-1)?.price_range.lowest ?? { nominal: 0, real: 0 }),
+        structuredClone(source.snapshots.at(-1)?.price_range.highest ?? { nominal: 0, real: 0 }),
+        true,
+      ),
+    ],
+    created_at: createdAt,
+    updated_at: createdAt,
+    paused_at: input.status === "paused" ? createdAt : null,
+    suspended_at: null,
+    opened_at: input.openedAt,
+    closed_at: input.closedAt,
+  };
+
+  state.sales.unshift(sale);
+  state.salesById.set(sale.id, sale);
+  return sale;
+}
+
+function toApiSellerInvert(state: SimulationState, customer: CustomerRecord) {
+  return {
+    id: "00000000-0000-4000-8000-00000000beef",
+    type: "seller" as const,
+    member: makeMemberProjection(state.operatorMember),
+    customer: cloneCustomer(customer),
+    citizen: structuredClone(state.operatorMember.citizen),
+    created_at: state.operatorMember.created_at,
+  };
+}
+
+function toApiAdminInvert(state: SimulationState, customer: CustomerRecord) {
+  return {
+    id: "00000000-0000-4000-8000-00000000cafe",
+    type: "administrator" as const,
+    member: makeMemberProjection(state.operatorMember),
+    customer: cloneCustomer(customer),
+    citizen: structuredClone(state.operatorMember.citizen),
+    created_at: state.operatorMember.created_at,
+  };
+}
+
+function depositBalanceOf(state: SimulationState, customerId: string) {
+  return (state.depositHistories.get(customerId) ?? []).at(-1)?.balance ?? 0;
+}
+
+function mileageBalanceOf(state: SimulationState, customerId: string) {
+  return (state.mileageHistories.get(customerId) ?? []).at(-1)?.balance ?? 0;
+}
+
+function toApiDepositMeta(meta: LedgerMetaRecord) {
+  return structuredClone(meta);
+}
+
+function toApiMileageMeta(meta: LedgerMetaRecord) {
+  return {
+    ...structuredClone(meta),
+    value: meta.value ?? null,
+  };
+}
+
+function toApiDepositHistory(
+  state: SimulationState,
+  customer: CustomerRecord,
+  history: DepositHistoryRecord,
+) {
+  const deposit = state.depositMetas.find((meta) => meta.id === history.source_id);
+  if (!deposit || !customer.citizen) {
+    throw new Error("Deposit history projection requires citizen and metadata.");
+  }
+  return {
+    id: history.id,
+    citizen: structuredClone(customer.citizen),
+    deposit: toApiDepositMeta(deposit),
+    source_id: history.source_id,
+    value: history.value,
+    balance: history.balance,
+    created_at: history.created_at,
+  };
+}
+
+function toApiMileageHistory(
+  state: SimulationState,
+  customer: CustomerRecord,
+  history: MileageHistoryRecord,
+) {
+  const mileage = state.mileageMetas.find((meta) => meta.id === history.source_id);
+  if (!mileage || !customer.citizen) {
+    throw new Error("Mileage history projection requires citizen and metadata.");
+  }
+  return {
+    id: history.id,
+    citizen: structuredClone(customer.citizen),
+    mileage: toApiMileageMeta(mileage),
+    source_id: history.source_id,
+    value: history.value,
+    balance: history.balance,
+    created_at: history.created_at,
+  };
+}
+
+function toApiCoupon(state: SimulationState, coupon: CouponRecord) {
+  const issued = [...state.couponTickets.values()].flat().filter((ticket) => ticket.coupon_id === coupon.id).length;
+  return {
+    id: coupon.id,
+    designer: {
+      id: "00000000-0000-4000-8000-00000000cafe",
+      type: "administrator" as const,
+      member: makeMemberProjection(state.operatorMember),
+      customer: null,
+      citizen: structuredClone(state.operatorMember.citizen),
+      created_at: state.operatorMember.created_at,
     },
-    citizen: null,
+    inventory: {
+      volume:
+        coupon.restriction.volume === null
+          ? null
+          : Math.max(coupon.restriction.volume - issued, 0),
+      volume_per_citizen: coupon.restriction.volume_per_citizen,
+    },
+    criterias: [],
+    discount: structuredClone(coupon.discount),
+    restriction: structuredClone(coupon.restriction),
+    name: coupon.name,
+    opened_at: coupon.opened_at,
+    closed_at: coupon.closed_at,
+    created_at: coupon.created_at,
+  };
+}
+
+function toApiCouponTicket(
+  state: SimulationState,
+  customer: CustomerRecord,
+  ticket: CouponTicketRecord,
+) {
+  const coupon = state.coupons.find((candidate) => candidate.id === ticket.coupon_id);
+  if (!coupon) {
+    throw new Error(`Unknown coupon ticket target: ${ticket.coupon_id}`);
+  }
+  return {
+    id: ticket.id,
+    customer: cloneCustomer(customer),
+    coupon: toApiCoupon(state, coupon),
+    created_at: ticket.created_at,
+    expired_at: ticket.expired_at,
   };
 }
 
@@ -1151,7 +1568,7 @@ function toApiSaleSummary(state: SimulationState, sale: SaleFixture) {
     opened_at: sale.opened_at,
     closed_at: sale.closed_at,
     section: structuredClone(sale.section),
-    seller: toApiSeller(),
+    seller: toApiSellerSummary(state),
   };
 }
 
@@ -1195,7 +1612,7 @@ function toApiSaleDetail(state: SimulationState, sale: SaleFixture) {
     opened_at: sale.opened_at,
     closed_at: sale.closed_at,
     section: structuredClone(sale.section),
-    seller: toApiSeller(),
+    seller: toApiSellerSummary(state),
   };
 }
 
@@ -1338,7 +1755,7 @@ function toApiCommodity(state: SimulationState, commodity: CartCommodityRecord) 
       opened_at: sale.opened_at,
       closed_at: sale.closed_at,
       section: structuredClone(sale.section),
-      seller: toApiSeller(),
+      seller: toApiSellerSummary(state),
     },
     orderable: commodity.orderable,
     pseudo: commodity.pseudo,
@@ -1423,6 +1840,39 @@ function createGuestCustomer(
   state.customers.set(customer.id, customer);
   state.carts.set(customer.id, []);
   state.orders.set(customer.id, []);
+  state.depositHistories.set(customer.id, [
+    {
+      id: nextRuntimeId(state),
+      source_id: state.depositMetas[0].id,
+      value: 250000,
+      balance: 250000,
+      created_at: advanceTimestamp(state, 3),
+    },
+    {
+      id: nextRuntimeId(state),
+      source_id: state.depositMetas[1].id,
+      value: -70000,
+      balance: 180000,
+      created_at: advanceTimestamp(state, 3),
+    },
+  ]);
+  state.mileageHistories.set(customer.id, [
+    {
+      id: nextRuntimeId(state),
+      source_id: state.mileageMetas[0].id,
+      value: 5000,
+      balance: 5000,
+      created_at: advanceTimestamp(state, 3),
+    },
+    {
+      id: nextRuntimeId(state),
+      source_id: state.mileageMetas[1].id,
+      value: 2000,
+      balance: 7000,
+      created_at: advanceTimestamp(state, 3),
+    },
+  ]);
+  state.couponTickets.set(customer.id, []);
 
   return {
     ...structuredClone(customer),
@@ -1589,6 +2039,188 @@ async function routeSimulation(url: URL, init?: RequestInit) {
       customer.member = makeMemberProjection(member);
       customer.citizen = member.citizen ? structuredClone(member.citizen) : customer.citizen;
       return Response.json(cloneCustomer(customer), { status: 200 });
+    }
+
+    if (method === "GET" && pathname === "/shoppings/customers/deposits/histories/balance") {
+      const customer = requireCustomer(state, headers);
+      return Response.json(depositBalanceOf(state, customer.id), { status: 200 });
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/customers/deposits/histories") {
+      const customer = requireCustomer(state, headers);
+      if (!customer.citizen) {
+        return httpError(403, "Citizen verification is required for deposit history.");
+      }
+      const histories = (state.depositHistories.get(customer.id) ?? [])
+        .slice()
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))
+        .map((history) => toApiDepositHistory(state, customer, history));
+      return Response.json(
+        pageOf(histories, {
+          page: typeof body.page === "number" ? body.page : 1,
+          limit: typeof body.limit === "number" ? body.limit : undefined,
+        }),
+        { status: 200 },
+      );
+    }
+
+    if (method === "GET" && pathname === "/shoppings/customers/mileages/histories/balance") {
+      const customer = requireCustomer(state, headers);
+      return Response.json(mileageBalanceOf(state, customer.id), { status: 200 });
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/customers/mileages/histories") {
+      const customer = requireCustomer(state, headers);
+      if (!customer.citizen) {
+        return httpError(403, "Citizen verification is required for mileage history.");
+      }
+      const histories = (state.mileageHistories.get(customer.id) ?? [])
+        .slice()
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))
+        .map((history) => toApiMileageHistory(state, customer, history));
+      return Response.json(
+        pageOf(histories, {
+          page: typeof body.page === "number" ? body.page : 1,
+          limit: typeof body.limit === "number" ? body.limit : undefined,
+        }),
+        { status: 200 },
+      );
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/customers/coupons") {
+      requireCustomer(state, headers);
+      const coupons = state.coupons.map((coupon) => toApiCoupon(state, coupon));
+      return Response.json(
+        pageOf(coupons, {
+          page: typeof body.page === "number" ? body.page : 1,
+          limit: typeof body.limit === "number" ? body.limit : undefined,
+        }),
+        { status: 200 },
+      );
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/customers/coupons/tickets") {
+      const customer = requireCustomer(state, headers);
+      const tickets = (state.couponTickets.get(customer.id) ?? [])
+        .slice()
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))
+        .map((ticket) => toApiCouponTicket(state, customer, ticket));
+      return Response.json(
+        pageOf(tickets, {
+          page: typeof body.page === "number" ? body.page : 1,
+          limit: typeof body.limit === "number" ? body.limit : undefined,
+        }),
+        { status: 200 },
+      );
+    }
+
+    if (method === "POST" && pathname === "/shoppings/customers/coupons/tickets") {
+      const customer = requireCustomer(state, headers);
+      const couponId = typeof body.coupon_id === "string" ? body.coupon_id : "";
+      const coupon = state.coupons.find((candidate) => candidate.id === couponId);
+      if (!coupon) {
+        return httpError(404, "The requested coupon could not be found.");
+      }
+      const existing = (state.couponTickets.get(customer.id) ?? []).filter(
+        (ticket) => ticket.coupon_id === couponId,
+      ).length;
+      if (
+        coupon.restriction.volume_per_citizen !== null &&
+        existing >= coupon.restriction.volume_per_citizen
+      ) {
+        return httpError(410, "This coupon has already been fully issued for the current customer.");
+      }
+      const issued = [...state.couponTickets.values()].flat().filter((ticket) => ticket.coupon_id === couponId).length;
+      if (coupon.restriction.volume !== null && issued >= coupon.restriction.volume) {
+        return httpError(410, "This coupon is out of stock.");
+      }
+
+      const createdAt = advanceTimestamp(state, 4);
+      const ticket: CouponTicketRecord = {
+        id: nextRuntimeId(state),
+        customer_id: customer.id,
+        coupon_id: couponId,
+        created_at: createdAt,
+        expired_at: coupon.restriction.expired_in
+          ? new Date(
+              Date.parse(createdAt) + coupon.restriction.expired_in * 24 * 60 * 60 * 1000,
+            ).toISOString()
+          : coupon.restriction.expired_at,
+      };
+      const tickets = state.couponTickets.get(customer.id) ?? [];
+      tickets.push(ticket);
+      state.couponTickets.set(customer.id, tickets);
+      return Response.json(toApiCouponTicket(state, customer, ticket), { status: 201 });
+    }
+
+    if (method === "GET" && pathname === "/shoppings/sellers/authenticate") {
+      const customer = requireSeller(state, headers);
+      return Response.json(toApiSellerInvert(state, customer), { status: 200 });
+    }
+
+    if (method === "POST" && pathname === "/shoppings/sellers/authenticate") {
+      const customer = requireCustomer(state, headers);
+      if (!customer.member) {
+        return httpError(403, "Membership is required before joining as a seller.");
+      }
+      if (!customer.citizen) {
+        return httpError(403, "Citizen verification is required before joining as a seller.");
+      }
+
+      state.sellerSessions.add(customer.id);
+      return Response.json(toApiSellerInvert(state, customer), { status: 201 });
+    }
+
+    if (method === "PUT" && pathname === "/shoppings/sellers/authenticate/login") {
+      const customer = requireCustomer(state, headers);
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const password = typeof body.password === "string" ? body.password : "";
+      if (
+        email !== state.operatorMember.email ||
+        password !== state.operatorMember.password
+      ) {
+        return httpError(401, "Seller email or password does not match.");
+      }
+
+      assignMemberToCustomer(customer, state.operatorMember);
+      state.sellerSessions.add(customer.id);
+      state.adminSessions.add(customer.id);
+      return Response.json(toApiSellerInvert(state, customer), { status: 200 });
+    }
+
+    if (method === "GET" && pathname === "/shoppings/admins/authenticate") {
+      const customer = requireAdmin(state, headers);
+      return Response.json(toApiAdminInvert(state, customer), { status: 200 });
+    }
+
+    if (method === "POST" && pathname === "/shoppings/admins/authenticate") {
+      const customer = requireCustomer(state, headers);
+      if (!customer.member) {
+        return httpError(403, "Membership is required before joining as an administrator.");
+      }
+      if (!customer.citizen) {
+        return httpError(403, "Citizen verification is required before joining as an administrator.");
+      }
+
+      state.adminSessions.add(customer.id);
+      return Response.json(toApiAdminInvert(state, customer), { status: 201 });
+    }
+
+    if (method === "PUT" && pathname === "/shoppings/admins/authenticate/login") {
+      const customer = requireCustomer(state, headers);
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      const password = typeof body.password === "string" ? body.password : "";
+      if (
+        email !== state.operatorMember.email ||
+        password !== state.operatorMember.password
+      ) {
+        return httpError(401, "Administrator email or password does not match.");
+      }
+
+      assignMemberToCustomer(customer, state.operatorMember);
+      state.sellerSessions.add(customer.id);
+      state.adminSessions.add(customer.id);
+      return Response.json(toApiAdminInvert(state, customer), { status: 200 });
     }
 
     const channelMatch = pathname.match(
@@ -1960,6 +2592,341 @@ async function routeSimulation(url: URL, init?: RequestInit) {
         ),
       );
       return Response.json(structuredClone(order.publish), { status: 201 });
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/sellers/sales") {
+      requireSeller(state, headers);
+      const sort = Array.isArray(body.sort) ? body.sort[0] : undefined;
+      const sales = [...state.sales].sort((left, right) =>
+        bySort(typeof sort === "string" ? sort : undefined, left, right),
+      );
+      return Response.json(
+        pageOf(
+          sales.map((sale) => toApiSaleSummary(state, sale)),
+          {
+            page: typeof body.page === "number" ? body.page : 1,
+            limit: typeof body.limit === "number" ? body.limit : undefined,
+          },
+        ),
+        { status: 200 },
+      );
+    }
+
+    const sellerSaleReplicaMatch = pathname.match(
+      /^\/shoppings\/sellers\/sales\/([0-9a-f-]+)\/replica$/,
+    );
+    if (method === "POST" && sellerSaleReplicaMatch) {
+      requireSeller(state, headers);
+      const sale = state.salesById.get(sellerSaleReplicaMatch[1]);
+      if (!sale) {
+        return httpError(404, "The requested seller sale could not be found.");
+      }
+      return Response.json(
+        {
+          __source_sale_id: sale.id,
+          content: {
+            title: `${sale.title} Replica`,
+            format: sale.description.format,
+            body: sale.description.body,
+            files: structuredClone(sale.files),
+            thumbnails: structuredClone(sale.thumbnails),
+          },
+          units: [],
+          tags: structuredClone(sale.tags),
+          category_codes: structuredClone(sale.categoryCodes),
+          section_code: sale.section.code,
+          status: sale.paused_at ? "paused" : null,
+          opened_at: sale.opened_at,
+          closed_at: sale.closed_at,
+        },
+        { status: 201 },
+      );
+    }
+
+    if (method === "POST" && pathname === "/shoppings/sellers/sales") {
+      requireSeller(state, headers);
+      const sourceId =
+        typeof body.__source_sale_id === "string" ? body.__source_sale_id : null;
+      const source = sourceId ? state.salesById.get(sourceId) : null;
+      if (!source) {
+        return httpError(400, "Simulation currently requires a replica source sale.");
+      }
+
+      const created = cloneSaleFixture(state, source, {
+        title:
+          typeof body.content === "object" &&
+          body.content !== null &&
+          typeof (body.content as Record<string, unknown>).title === "string"
+            ? String((body.content as Record<string, unknown>).title)
+            : `${source.title} Replica`,
+        tags: ensureArray(body.tags),
+        sectionCode:
+          typeof body.section_code === "string" ? body.section_code : source.section.code,
+        openedAt: typeof body.opened_at === "string" ? body.opened_at : null,
+        closedAt: typeof body.closed_at === "string" ? body.closed_at : null,
+        status: body.status === "paused" ? "paused" : "live",
+      });
+
+      return Response.json(toApiSaleDetail(state, created), { status: 201 });
+    }
+
+    const sellerSaleMatch = pathname.match(/^\/shoppings\/sellers\/sales\/([0-9a-f-]+)$/);
+    if (method === "GET" && sellerSaleMatch) {
+      requireSeller(state, headers);
+      const sale = state.salesById.get(sellerSaleMatch[1]);
+      return sale
+        ? Response.json(toApiSaleDetail(state, sale), { status: 200 })
+        : httpError(404, "The requested seller sale could not be found.");
+    }
+
+    const sellerSalePauseMatch = pathname.match(
+      /^\/shoppings\/sellers\/sales\/([0-9a-f-]+)\/pause$/,
+    );
+    if (method === "DELETE" && sellerSalePauseMatch) {
+      requireSeller(state, headers);
+      const sale = state.salesById.get(sellerSalePauseMatch[1]);
+      if (!sale) {
+        return httpError(404, "The requested seller sale could not be found.");
+      }
+      sale.paused_at = advanceTimestamp(state, 2);
+      sale.updated_at = sale.paused_at;
+      return Response.json(null, { status: 200 });
+    }
+
+    const sellerSaleRestoreMatch = pathname.match(
+      /^\/shoppings\/sellers\/sales\/([0-9a-f-]+)\/restore$/,
+    );
+    if (method === "PUT" && sellerSaleRestoreMatch) {
+      requireSeller(state, headers);
+      const sale = state.salesById.get(sellerSaleRestoreMatch[1]);
+      if (!sale) {
+        return httpError(404, "The requested seller sale could not be found.");
+      }
+      sale.paused_at = null;
+      sale.suspended_at = null;
+      sale.updated_at = advanceTimestamp(state, 2);
+      return Response.json(null, { status: 200 });
+    }
+
+    const sellerSaleOpenMatch = pathname.match(
+      /^\/shoppings\/sellers\/sales\/([0-9a-f-]+)\/open$/,
+    );
+    if (method === "PUT" && sellerSaleOpenMatch) {
+      requireSeller(state, headers);
+      const sale = state.salesById.get(sellerSaleOpenMatch[1]);
+      if (!sale) {
+        return httpError(404, "The requested seller sale could not be found.");
+      }
+      sale.opened_at = typeof body.opened_at === "string" ? body.opened_at : null;
+      sale.closed_at = typeof body.closed_at === "string" ? body.closed_at : null;
+      sale.updated_at = advanceTimestamp(state, 2);
+      return Response.json(null, { status: 200 });
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/sellers/orders") {
+      requireSeller(state, headers);
+      const orders = [...state.orders.values()]
+        .flat()
+        .filter((order) => order.publish?.paid_at)
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))
+        .map((order) => toApiOrder(state, order));
+      return Response.json(
+        pageOf(orders, {
+          page: typeof body.page === "number" ? body.page : 1,
+          limit: typeof body.limit === "number" ? body.limit : undefined,
+        }),
+        { status: 200 },
+      );
+    }
+
+    const sellerOrderMatch = pathname.match(/^\/shoppings\/sellers\/orders\/([0-9a-f-]+)$/);
+    if (method === "GET" && sellerOrderMatch) {
+      requireSeller(state, headers);
+      const order = [...state.orders.values()]
+        .flat()
+        .find((candidate) => candidate.id === sellerOrderMatch[1] && candidate.publish?.paid_at);
+      return order
+        ? Response.json(toApiOrder(state, order), { status: 200 })
+        : httpError(404, "The requested seller order could not be found.");
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/admins/sales") {
+      requireAdmin(state, headers);
+      const sort = Array.isArray(body.sort) ? body.sort[0] : undefined;
+      const sales = [...state.sales].sort((left, right) =>
+        bySort(typeof sort === "string" ? sort : undefined, left, right),
+      );
+      return Response.json(
+        pageOf(
+          sales.map((sale) => toApiSaleSummary(state, sale)),
+          {
+            page: typeof body.page === "number" ? body.page : 1,
+            limit: typeof body.limit === "number" ? body.limit : undefined,
+          },
+        ),
+        { status: 200 },
+      );
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/admins/orders") {
+      requireAdmin(state, headers);
+      const orders = [...state.orders.values()]
+        .flat()
+        .filter((order) => order.publish?.paid_at)
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))
+        .map((order) => toApiOrder(state, order));
+      return Response.json(
+        pageOf(orders, {
+          page: typeof body.page === "number" ? body.page : 1,
+          limit: typeof body.limit === "number" ? body.limit : undefined,
+        }),
+        { status: 200 },
+      );
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/admins/coupons") {
+      requireAdmin(state, headers);
+      const coupons = state.coupons
+        .slice()
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))
+        .map((coupon) => toApiCoupon(state, coupon));
+      return Response.json(
+        pageOf(coupons, {
+          page: typeof body.page === "number" ? body.page : 1,
+          limit: typeof body.limit === "number" ? body.limit : undefined,
+        }),
+        { status: 200 },
+      );
+    }
+
+    if (method === "POST" && pathname === "/shoppings/admins/coupons") {
+      requireAdmin(state, headers);
+      const coupon: CouponRecord = {
+        id: nextRuntimeId(state),
+        name: typeof body.name === "string" ? body.name : "Untitled coupon",
+        created_at: advanceTimestamp(state, 3),
+        opened_at: typeof body.opened_at === "string" ? body.opened_at : null,
+        closed_at: typeof body.closed_at === "string" ? body.closed_at : null,
+        discount:
+          body.discount && typeof body.discount === "object"
+            ? {
+                unit:
+                  (body.discount as Record<string, unknown>).unit === "amount"
+                    ? "amount"
+                    : "percent",
+                value: Number((body.discount as Record<string, unknown>).value ?? 0),
+                threshold:
+                  typeof (body.discount as Record<string, unknown>).threshold === "number"
+                    ? Number((body.discount as Record<string, unknown>).threshold)
+                    : null,
+                limit:
+                  typeof (body.discount as Record<string, unknown>).limit === "number"
+                    ? Number((body.discount as Record<string, unknown>).limit)
+                    : null,
+                multiplicative:
+                  (body.discount as Record<string, unknown>).multiplicative === true,
+              }
+            : {
+                unit: "percent",
+                value: 10,
+                threshold: null,
+                limit: null,
+              },
+        restriction:
+          body.restriction && typeof body.restriction === "object"
+            ? {
+                access:
+                  (body.restriction as Record<string, unknown>).access === "private"
+                    ? "private"
+                    : "public",
+                exclusive:
+                  (body.restriction as Record<string, unknown>).exclusive === true,
+                volume:
+                  typeof (body.restriction as Record<string, unknown>).volume === "number"
+                    ? Number((body.restriction as Record<string, unknown>).volume)
+                    : null,
+                volume_per_citizen:
+                  typeof (body.restriction as Record<string, unknown>).volume_per_citizen ===
+                  "number"
+                    ? Number(
+                        (body.restriction as Record<string, unknown>).volume_per_citizen,
+                      )
+                    : null,
+                expired_in:
+                  typeof (body.restriction as Record<string, unknown>).expired_in === "number"
+                    ? Number((body.restriction as Record<string, unknown>).expired_in)
+                    : null,
+                expired_at:
+                  typeof (body.restriction as Record<string, unknown>).expired_at === "string"
+                    ? String((body.restriction as Record<string, unknown>).expired_at)
+                    : null,
+              }
+            : {
+                access: "public",
+                exclusive: false,
+                volume: null,
+                volume_per_citizen: null,
+                expired_in: null,
+                expired_at: null,
+              },
+      };
+      state.coupons.unshift(coupon);
+      return Response.json(toApiCoupon(state, coupon), { status: 201 });
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/admins/deposits") {
+      requireAdmin(state, headers);
+      return Response.json(
+        pageOf(
+          state.depositMetas.map(toApiDepositMeta),
+          {
+            page: typeof body.page === "number" ? body.page : 1,
+            limit: typeof body.limit === "number" ? body.limit : undefined,
+          },
+        ),
+        { status: 200 },
+      );
+    }
+
+    if (method === "POST" && pathname === "/shoppings/admins/deposits") {
+      requireAdmin(state, headers);
+      const meta: LedgerMetaRecord = {
+        id: nextRuntimeId(state),
+        code: typeof body.code === "string" ? body.code : "deposit_meta",
+        source: typeof body.source === "string" ? body.source : "Deposit meta",
+        direction: body.direction === -1 ? -1 : 1,
+        created_at: advanceTimestamp(state, 2),
+      };
+      state.depositMetas.unshift(meta);
+      return Response.json(toApiDepositMeta(meta), { status: 201 });
+    }
+
+    if (method === "PATCH" && pathname === "/shoppings/admins/mileages") {
+      requireAdmin(state, headers);
+      return Response.json(
+        pageOf(
+          state.mileageMetas.map(toApiMileageMeta),
+          {
+            page: typeof body.page === "number" ? body.page : 1,
+            limit: typeof body.limit === "number" ? body.limit : undefined,
+          },
+        ),
+        { status: 200 },
+      );
+    }
+
+    if (method === "POST" && pathname === "/shoppings/admins/mileages") {
+      requireAdmin(state, headers);
+      const meta: LedgerMetaRecord = {
+        id: nextRuntimeId(state),
+        code: typeof body.code === "string" ? body.code : "mileage_meta",
+        source: typeof body.source === "string" ? body.source : "Mileage meta",
+        direction: body.direction === -1 ? -1 : 1,
+        value: typeof body.value === "number" ? body.value : null,
+        created_at: advanceTimestamp(state, 2),
+      };
+      state.mileageMetas.unshift(meta);
+      return Response.json(toApiMileageMeta(meta), { status: 201 });
     }
 
     return httpError(404, `No simulated route matched ${method} ${pathname}.`);
